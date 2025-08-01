@@ -46,3 +46,22 @@ class GameEngine(ABC):
     def get_legal_actions(self, game_state: GameState) -> List[str]:
         """Get legal actions for current player"""
         pass
+
+
+class MockTranslator:
+    """
+    Skeleton mock for Protocol compliance testing
+    DOES NOT return fake data - only validates Protocol interface
+    """
+    
+    def to_engine_state(self, game_state: GameState) -> Any:
+        raise NotImplementedError("Mock implementation - use real translator for actual testing")
+    
+    def from_engine_state(self, engine_state: Any) -> GameState:
+        raise NotImplementedError("Mock implementation - use real translator for actual testing")
+    
+    def to_engine_action(self, action: Action, game_state: GameState) -> Any:
+        raise NotImplementedError("Mock implementation - use real translator for actual testing")
+    
+    def get_legal_actions(self, game_state: GameState) -> List[str]:
+        raise NotImplementedError("Mock implementation - use real translator for actual testing")
