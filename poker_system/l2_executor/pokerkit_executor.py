@@ -237,8 +237,8 @@ class PokerKitExecutor(GameEngine):
             # Call L1 pure rules to determine winner
             winners, payouts = PokerRules.determine_winners(temp_l1_state)
             
-            # Return first winner (MVP simplification)
-            return winners[0] if winners else None
+            # Return single winner only (MVP simplification - future Web UI needs full winner list)
+            return winners[0] if len(winners) == 1 else None  # MVP 仅支持单赢家
             
         except Exception as e:
             print(f"Warning: Could not determine winner via L1 rules: {e}")

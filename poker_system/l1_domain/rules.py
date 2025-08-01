@@ -87,6 +87,7 @@ class PokerRules:
     @staticmethod
     def _evaluate_showdown(state: GameState, active_players: List[int]) -> Tuple[List[int], Dict[int, int]]:
         """Evaluate showdown between active players"""
+        # TODO: 实现完整 Showdown 逻辑（边池、多赢家、分池）
         if len(state.community_cards) < 5:
             # Pre-river: simplified logic for MVP
             # TODO: Implement proper showdown for all streets

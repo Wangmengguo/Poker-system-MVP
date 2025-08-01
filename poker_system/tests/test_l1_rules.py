@@ -100,6 +100,7 @@ class TestL1Rules(unittest.TestCase):
         )
         
         winners, payouts = PokerRules.determine_winners(state)
+        # 当前 MVP 仅支持单赢家，后续测试需更新
         self.assertGreaterEqual(len(winners), 1)  # Should have at least one winner (could be tie)
         for winner in winners:
             self.assertIn(winner, [0, 1])  # Winner should be one of the players
