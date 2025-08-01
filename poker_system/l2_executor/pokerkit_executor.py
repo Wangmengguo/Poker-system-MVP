@@ -7,6 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from l1_domain.game_state import GameState, Player, Position, PlayerStatus, GameConfig
 from l1_domain.action import Action, ActionType, FoldAction, CallAction, CheckAction, RaiseAction, AllInAction
 from l1_domain.translator import Translator, GameEngine, StepResult
+from l1_domain.rules import PokerRules
 
 try:
     from pokerkit import NoLimitTexasHoldem, Automation
@@ -104,7 +105,7 @@ class PokerKitExecutor(GameEngine):
             current_bet=max(pk_state.bets) if pk_state.bets else 0,
             street=street,
             is_terminal=not pk_state.status,
-            winner_index=None  # Simplified for MVP
+            winner_index=self._determine_winner_via_l1_rules(pk_state),
         )
     
     def to_engine_action(self, action: Action, game_state: GameState) -> Any:
@@ -219,3 +220,69 @@ class PokerKitExecutor(GameEngine):
             3: "river"
         }
         return street_names.get(pk_state.street, "preflop")
+    
+    def _determine_winner_via_l1_rules(self, pk_state: Any) -> Optional[int]:
+        """
+        Determine winner by translating to L1 state and calling L1 rules
+        L2 ONLY does translation - L1 contains all poker logic
+        """
+        try:
+            # If game is still running, no winner yet
+            if pk_state.status:
+                return None
+            
+            # Create temporary L1 state WITHOUT calling from_engine_state to avoid recursion
+            temp_l1_state = self._create_temp_l1_state_for_winner_check(pk_state)
+            
+            # Call L1 pure rules to determine winner
+            winners, payouts = PokerRules.determine_winners(temp_l1_state)
+            
+            # Return first winner (MVP simplification)
+            return winners[0] if winners else None
+            
+        except Exception as e:
+            print(f"Warning: Could not determine winner via L1 rules: {e}")
+            return None
+    
+    def _create_temp_l1_state_for_winner_check(self, pk_state: Any) -> GameState:
+        """Create temporary L1 state for winner determination - avoids recursion"""
+        players = []
+        
+        for i in range(pk_state.player_count):
+            hole_cards = None
+            if pk_state.hole_cards and i < len(pk_state.hole_cards) and pk_state.hole_cards[i]:
+                hole_cards = tuple([str(card) for card in pk_state.hole_cards[i]])
+            
+            status = PlayerStatus.ACTIVE
+            if i < len(pk_state.statuses) and not pk_state.statuses[i]:  # Player is out
+                status = PlayerStatus.OUT
+            
+            current_bet = pk_state.bets[i] if i < len(pk_state.bets) else 0
+            
+            player = Player(
+                id=f"Player_{i}",
+                stack=pk_state.stacks[i],
+                hole_cards=hole_cards,
+                position=self._get_position(i, pk_state.player_count),
+                status=status,
+                current_bet=current_bet,
+                total_bet_this_hand=current_bet
+            )
+            players.append(player)
+        
+        community_cards = tuple([str(card) for card in pk_state.board_cards]) if pk_state.board_cards else tuple()
+        street = self._get_street_name(pk_state)
+        
+        return GameState(
+            players=tuple(players),
+            community_cards=community_cards,
+            pot=sum(pk_state.bets) if pk_state.bets else 0,
+            current_player_index=0,  # Not needed for winner determination
+            dealer_index=0,
+            small_blind=pk_state.blinds_or_straddles[0] if pk_state.blinds_or_straddles else 0,
+            big_blind=pk_state.blinds_or_straddles[1] if len(pk_state.blinds_or_straddles) > 1 else 0,
+            current_bet=max(pk_state.bets) if pk_state.bets else 0,
+            street=street,
+            is_terminal=not pk_state.status,
+            winner_index=None  # Will be determined by L1 rules
+        )
