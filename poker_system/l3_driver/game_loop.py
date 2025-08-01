@@ -127,3 +127,170 @@ class GameLoop:
         """Reset the game state"""
         self.current_state = None
         self.hand_history = []
+
+    def export_hand_history(self, filename: str = None) -> str:
+        """Export hand history with comprehensive data"""
+        import json
+        from datetime import datetime
+        
+        # Generate comprehensive hand data
+        export_data = {
+            "timestamp": datetime.now().isoformat(),
+            "game_type": "No-Limit Texas Hold'em",
+            "version": "1.0.0-MVP",
+            "hand_history": self.hand_history,
+            "final_state": None,
+            "winner_analysis": None,
+            "statistics": None
+        }
+        
+        if self.current_state:
+            # Export final game state
+            export_data["final_state"] = {
+                "players": [
+                    {
+                        "id": p.id,
+                        "final_stack": p.stack,
+                        "position": p.position.value if p.position else None,
+                        "status": p.status.value,
+                        "hole_cards": p.hole_cards if p.hole_cards else None
+                    }
+                    for p in self.current_state.players
+                ],
+                "community_cards": list(self.current_state.community_cards),
+                "pot": self.current_state.pot,
+                "street": self.current_state.street,
+                "is_terminal": self.current_state.is_terminal
+            }
+            
+            # Enhanced winner analysis (will use L1 rules after Track 1 merge)
+            if self.current_state.is_terminal and self.current_state.winner_index is not None:
+                winner = self.current_state.players[self.current_state.winner_index]
+                export_data["winner_analysis"] = {
+                    "winner_index": self.current_state.winner_index,
+                    "winner_id": winner.id,
+                    "winner_final_stack": winner.stack,
+                    "winning_method": "L1_rules_evaluation",  # Will be accurate after Track 1
+                    "pot_won": self.current_state.pot
+                }
+            
+            # Generate basic statistics
+            export_data["statistics"] = self.get_game_statistics()
+        
+        # Convert to JSON
+        json_str = json.dumps(export_data, indent=2, ensure_ascii=False)
+        
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(json_str)
+                return f"Hand history exported to {filename}"
+            except IOError as e:
+                return f"Failed to export to {filename}: {e}"
+        
+        return json_str
+
+    def get_game_statistics(self) -> dict:
+        """Get comprehensive game statistics"""
+        stats = {
+            "players": {},
+            "game_summary": {},
+            "action_summary": {}
+        }
+        
+        if not self.current_state:
+            return stats
+        
+        # Game summary statistics
+        stats["game_summary"] = {
+            "total_pot": self.current_state.pot,
+            "final_street": self.current_state.street,
+            "is_complete": self.current_state.is_terminal,
+            "num_players": len(self.current_state.players),
+            "total_actions": len(self.hand_history) - 1  # Exclude game start message
+        }
+        
+        # Player statistics
+        for i, player in enumerate(self.current_state.players):
+            stats["players"][player.id] = {
+                "final_stack": player.stack,
+                "position": player.position.value if player.position else None,
+                "status": player.status.value,
+                "is_winner": (self.current_state.winner_index == i),
+                "stack_change": player.stack - stats["game_summary"].get("starting_stack", 1000),
+                "current_bet": player.current_bet,
+                "total_bet_this_hand": player.total_bet_this_hand
+            }
+            
+            # Calculate winnings/losses
+            if self.current_state.is_terminal and self.current_state.winner_index == i:
+                stats["players"][player.id]["winnings"] = self.current_state.pot
+            else:
+                stats["players"][player.id]["winnings"] = 0
+        
+        # Action summary (basic analysis of hand history)
+        action_counts = {}
+        for event in self.hand_history:
+            if any(action in event.lower() for action in ['fold', 'call', 'raise', 'check', 'all-in']):
+                for action_type in ['fold', 'call', 'raise', 'check', 'all-in']:
+                    if action_type in event.lower():
+                        action_counts[action_type] = action_counts.get(action_type, 0) + 1
+                        break
+        
+        stats["action_summary"] = action_counts
+        
+        return stats
+
+    def display_game_summary(self):
+        """Display a formatted game summary"""
+        if not self.current_state:
+            return
+            
+        print("\n" + "="*50)
+        print("GAME SUMMARY")
+        print("="*50)
+        
+        # Winner information
+        if self.current_state.is_terminal and self.current_state.winner_index is not None:
+            winner = self.current_state.players[self.current_state.winner_index]
+            print(f"🏆 WINNER: {winner.id}")
+            print(f"💰 Pot Won: ${self.current_state.pot}")
+            print(f"📊 Final Stack: ${winner.stack}")
+        
+        # Final stacks
+        print("\nFinal Stacks:")
+        for player in self.current_state.players:
+            status_icon = "🏆" if (self.current_state.winner_index is not None and 
+                                self.current_state.players[self.current_state.winner_index].id == player.id) else "💰"
+            print(f"  {status_icon} {player.id}: ${player.stack}")
+        
+        # Game statistics
+        stats = self.get_game_statistics()
+        print(f"\nGame Stats:")
+        print(f"  Total Actions: {stats['game_summary']['total_actions']}")
+        print(f"  Final Street: {stats['game_summary']['final_street'].title()}")
+        print(f"  Total Pot: ${stats['game_summary']['total_pot']}")
+        
+        # Action summary
+        if stats["action_summary"]:
+            print(f"\nAction Summary:")
+            for action, count in stats["action_summary"].items():
+                print(f"  {action.title()}s: {count}")
+
+    def prompt_for_export(self) -> bool:
+        """Prompt user for hand history export"""
+        if not self.current_state or not self.current_state.is_terminal:
+            return False
+            
+        try:
+            choice = input("\n📁 Export hand history? (y/N): ").strip().lower()
+            if choice in ['y', 'yes']:
+                import time
+                filename = f"hand_history_{int(time.time())}.json"
+                result = self.export_hand_history(filename)
+                print(f"✅ {result}")
+                return True
+        except (KeyboardInterrupt, EOFError):
+            print("\nSkipping export.")
+        
+        return False

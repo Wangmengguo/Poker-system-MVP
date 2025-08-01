@@ -103,6 +103,13 @@ class PokerCLI:
             else:
                 print("\nGame ended without a clear winner.")
             
+            # Display enhanced game summary
+            self.game_loop.display_game_summary()
+
+            # Prompt for export
+            if final_state and final_state.is_terminal:
+                self.game_loop.prompt_for_export()
+
             print("\nGame completed successfully!")
             return final_state
             
